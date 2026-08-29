@@ -672,7 +672,7 @@ class Plain:
 
     def test_tsconfig_alias_resolution(self):
         """Alias imports should resolve to absolute file paths."""
-        nodes, edges = self.parser.parse_file(FIXTURES / "alias_importer.ts")
+        nodes, edges = CodeParser(FIXTURES).parse_file(FIXTURES / "alias_importer.ts")
         imports = [e for e in edges if e.kind == "IMPORTS_FROM"]
         resolved_imports = [e for e in imports if e.target.endswith("utils.ts")]
         assert len(resolved_imports) >= 1, (

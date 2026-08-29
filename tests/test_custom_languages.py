@@ -147,6 +147,38 @@ function_node_types = ["function_definition"]
         assert "not_a_real_grammar" in caplog.text
         assert "tree_sitter_language_pack" in caplog.text
 
+    def test_dynamic_load_error_skips_entry_and_preserves_valid_languages(
+        self,
+        tmp_path,
+        caplog,
+    ):
+        write_config(tmp_path, """\
+[languages.erlang]
+extensions = [".erl"]
+grammar = "erlang"
+function_node_types = ["function_clause"]
+
+[languages.broken]
+extensions = [".broken"]
+grammar = "dynamic_failure"
+function_node_types = ["function_definition"]
+""")
+        real_get_language = custom_languages.tslp.get_language
+
+        def get_language(grammar):
+            if grammar == "dynamic_failure":
+                raise custom_languages.tslp.DynamicLoadError("dynamic loader failed")
+            return real_get_language(grammar)
+
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(custom_languages.tslp, "get_language", get_language)
+            with caplog.at_level(logging.WARNING):
+                result = load(tmp_path)
+
+        assert set(result) == {"erlang"}
+        assert "dynamic loader failed" in caplog.text
+        assert "skipping" in caplog.text
+
     def test_builtin_extension_collision_skipped(self, tmp_path, caplog):
         write_config(tmp_path, """\
 [languages.notpython]

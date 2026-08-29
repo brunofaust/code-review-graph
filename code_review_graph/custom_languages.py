@@ -332,7 +332,7 @@ def _validate_entry(
     # themselves are created lazily by CodeParser._get_parser.
     try:
         tslp.get_language(grammar)  # type: ignore[arg-type]
-    except (LookupError, ValueError, ImportError, OSError) as exc:
+    except (LookupError, ValueError, ImportError, OSError, tslp.Error) as exc:
         logger.warning(
             "%s: custom language %r: grammar %r is not available in "
             "tree_sitter_language_pack (%s) — skipping",

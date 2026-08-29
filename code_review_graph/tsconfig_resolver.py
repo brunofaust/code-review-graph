@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import stat
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -31,11 +35,130 @@ _PROBE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".vue"]
 _TSCONFIG_NAMES = ["tsconfig.json", "tsconfig.app.json", "jsconfig.json"]
 
 
-class TsconfigResolver:
-    """Resolves TypeScript path aliases (e.g., @/ -> src/) using tsconfig.json."""
+def _path_is_within(path: Path, root: Path) -> bool:
+    """Return whether a lexically normalized path is inside the repository root."""
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
 
-    def __init__(self) -> None:
+
+def _lexical_absolute(path: Path) -> Path:
+    """Normalize a path without querying filesystem components."""
+    return Path(os.path.abspath(os.path.normpath(os.fspath(path))))
+
+
+def _safe_lexical_path(path: Path, root: Path) -> Optional[Path]:
+    """Return a lexically contained path without querying the filesystem."""
+    normalized = _lexical_absolute(path)
+    return normalized if _path_is_within(normalized, root) else None
+
+
+@contextmanager
+def _open_repo_path(
+    path: Path,
+    root: Path,
+    *,
+    directory: bool = False,
+) -> Iterator[Optional[int]]:
+    """Open a contained path component-by-component without following symlinks."""
+    normalized = _safe_lexical_path(path, root)
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if normalized is None or nofollow is None or directory_flag is None:
+        yield None
+        return
+
+    close_on_exec = getattr(os, "O_CLOEXEC", 0)
+    directory_flags = os.O_RDONLY | nofollow | directory_flag | close_on_exec
+    file_flags = os.O_RDONLY | nofollow | close_on_exec
+    opened: list[int] = []
+    try:
+        current_fd = os.open(root, directory_flags)
+        opened.append(current_fd)
+        parts = normalized.relative_to(root).parts
+        for part in parts[:-1]:
+            current_fd = os.open(part, directory_flags, dir_fd=current_fd)
+            opened.append(current_fd)
+        if parts:
+            target_flags = directory_flags if directory else file_flags
+            target_fd = os.open(parts[-1], target_flags, dir_fd=current_fd)
+            opened.append(target_fd)
+        else:
+            target_fd = current_fd
+    except OSError:
+        target_fd = None
+    try:
+        yield target_fd
+    finally:
+        for fd in reversed(opened):
+            try:
+                os.close(fd)
+            except OSError as exc:
+                logger.debug("TsconfigResolver: cannot close descriptor %s: %s", fd, exc)
+
+
+def _read_repo_text(path: Path, root: Path) -> Optional[str]:
+    """Read a regular file through a descriptor rooted at the repository."""
+    with _open_repo_path(path, root) as fd:
+        if fd is None or not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        chunks: list[bytes] = []
+        while chunk := os.read(fd, 64 * 1024):
+            chunks.append(chunk)
+    return b"".join(chunks).decode("utf-8", errors="replace")
+
+
+def _probe_regular_file(path: Path, root: Path) -> Optional[Path]:
+    """Return a lexical file identity after descriptor-relative verification."""
+    normalized = _safe_lexical_path(path, root)
+    if normalized is None:
+        return None
+    with _open_repo_path(normalized, root) as fd:
+        if fd is None or not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+    return normalized
+
+
+def _probe_directory(path: Path, root: Path) -> Optional[Path]:
+    """Return a lexical directory identity after descriptor-relative verification."""
+    normalized = _safe_lexical_path(path, root)
+    if normalized is None:
+        return None
+    with _open_repo_path(normalized, root, directory=True) as fd:
+        if fd is None or not stat.S_ISDIR(os.fstat(fd).st_mode):
+            return None
+    return normalized
+
+
+class TsconfigResolver:
+    """Resolve TypeScript path aliases within an explicit repository boundary."""
+
+    def __init__(self, repo_root: Optional[Path] = None) -> None:
+        self._repo_root = Path(repo_root).resolve() if repo_root is not None else None
         self._cache: dict[str, Optional[dict]] = {}
+
+    @property
+    def repo_root(self) -> Optional[Path]:
+        """Return the immutable repository containment boundary."""
+        return self._repo_root
+
+    def _contained_path(self, path: Path) -> Optional[Path]:
+        """Return a safe lexical path within the repository boundary."""
+        if self._repo_root is None:
+            logger.warning(
+                "TsconfigResolver: refusing %s because no repo_root boundary was set",
+                path,
+            )
+            return None
+        safe_path = _safe_lexical_path(path, self._repo_root)
+        if safe_path is None:
+            logger.warning(
+                "TsconfigResolver: refusing path outside repository root: %s",
+                _lexical_absolute(path),
+            )
+        return safe_path
 
     # ------------------------------------------------------------------
     # Public API
@@ -55,11 +178,9 @@ class TsconfigResolver:
             if not paths:
                 return None
 
-            if base_url:
-                base_dir = (Path(tsconfig_dir) / base_url).resolve()
-            else:
-                base_dir = Path(tsconfig_dir).resolve()
-
+            base_dir = self._contained_path(Path(tsconfig_dir) / (base_url or ""))
+            if base_dir is None:
+                return None
             return self._match_and_probe(import_str, paths, base_dir)
         except (OSError, ValueError, TypeError):
             logger.debug(
@@ -73,7 +194,9 @@ class TsconfigResolver:
 
     def _load_tsconfig_for_file(self, file_path: str) -> Optional[dict]:
         """Find and load tsconfig.json for the given file."""
-        start_dir = Path(file_path).parent.resolve()
+        start_dir = self._contained_path(Path(file_path).parent)
+        if start_dir is None:
+            return None
         current = start_dir
         visited: list[str] = []
 
@@ -88,37 +211,59 @@ class TsconfigResolver:
             visited.append(dir_str)
 
             for name in _TSCONFIG_NAMES:
-                candidate = current / name
-                if candidate.is_file():
+                candidate = self._contained_path(current / name)
+                if candidate is not None:
                     config = self._parse_tsconfig(candidate)
+                else:
+                    config = None
+                if config is not None:
                     config["_tsconfig_dir"] = dir_str
                     for visited_dir in visited:
                         self._cache[visited_dir] = config
                     return config
 
             parent = current.parent
-            if parent == current:
+            if parent == current or current == self._repo_root:
                 for visited_dir in visited:
                     self._cache[visited_dir] = None
                 return None
             current = parent
 
-    def _parse_tsconfig(self, tsconfig_path: Path) -> dict:
+    def _parse_tsconfig(self, tsconfig_path: Path) -> Optional[dict]:
         """Parse a tsconfig.json file (supports JSONC comments)."""
+        if self._repo_root is None:
+            return None
+        contained_tsconfig = self._contained_path(tsconfig_path)
+        if contained_tsconfig is None:
+            return None
+        raw = _read_repo_text(contained_tsconfig, self._repo_root)
+        if raw is None:
+            return None
         seen: set[str] = set()
-        return self._resolve_extends(tsconfig_path, seen)
+        return self._resolve_extends(contained_tsconfig, seen, raw)
 
-    def _resolve_extends(self, tsconfig_path: Path, seen: set[str]) -> dict:
+    def _resolve_extends(
+        self,
+        tsconfig_path: Path,
+        seen: set[str],
+        raw: Optional[str] = None,
+    ) -> dict:
         """Recursively resolve the tsconfig extends chain."""
-        canonical = str(tsconfig_path.resolve())
+        if self._repo_root is None:
+            return {}
+        contained_tsconfig = self._contained_path(tsconfig_path)
+        if contained_tsconfig is None:
+            return {}
+        tsconfig_path = contained_tsconfig
+        canonical = str(tsconfig_path)
         if canonical in seen:
             logger.debug("TsconfigResolver: cycle detected at %s", canonical)
             return {}
         seen = seen | {canonical}
 
-        try:
-            raw = tsconfig_path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        if raw is None:
+            raw = _read_repo_text(tsconfig_path, self._repo_root)
+        if raw is None:
             logger.debug("TsconfigResolver: cannot read %s", tsconfig_path)
             return {}
 
@@ -133,11 +278,12 @@ class TsconfigResolver:
 
         extends: Optional[str] = data.get("extends")
         if extends and isinstance(extends, str) and extends.startswith("."):
-            parent_path = (tsconfig_path.parent / extends).resolve()
+            parent_path = tsconfig_path.parent / extends
             if not parent_path.suffix:
                 parent_path = parent_path.with_suffix(".json")
-            if parent_path.is_file():
-                parent_config = self._resolve_extends(parent_path, seen)
+            contained_parent = self._contained_path(parent_path)
+            if contained_parent is not None:
+                parent_config = self._resolve_extends(contained_parent, seen)
                 parent_opts = parent_config.get("compilerOptions", {})
                 result.setdefault("compilerOptions", {}).update(parent_opts)
 
@@ -224,8 +370,10 @@ class TsconfigResolver:
                 else:
                     mapped = replacement
 
-                candidate_base = (base_dir / mapped).resolve()
-                found = _probe_path(candidate_base)
+                candidate_base = self._contained_path(base_dir / mapped)
+                if candidate_base is None:
+                    continue
+                found = _probe_path(candidate_base, self._repo_root)
                 if found:
                     return str(found)
 
@@ -250,17 +398,23 @@ def _match_pattern(pattern: str, import_str: str) -> Optional[str]:
     return import_str[len(prefix):end]
 
 
-def _probe_path(base: Path) -> Optional[Path]:
-    """Probe base and base + extensions for an existing file."""
-    if base.is_file():
-        return base
+def _probe_path(base: Path, repo_root: Optional[Path]) -> Optional[Path]:
+    """Probe a path only after each candidate is contained in the repository."""
+    if repo_root is None:
+        return None
+
+    def contained_file(candidate: Path) -> Optional[Path]:
+        return _probe_regular_file(candidate, repo_root)
+
+    if found := contained_file(base):
+        return found
     for ext in _PROBE_EXTENSIONS:
         candidate = base.with_suffix(ext) if not base.suffix else Path(str(base) + ext)
-        if candidate.is_file():
-            return candidate
-    if base.is_dir():
+        if found := contained_file(candidate):
+            return found
+    safe_base = _probe_directory(base, repo_root)
+    if safe_base is not None:
         for ext in _PROBE_EXTENSIONS:
-            candidate = base / f"index{ext}"
-            if candidate.is_file():
-                return candidate
+            if found := contained_file(safe_base / f"index{ext}"):
+                return found
     return None

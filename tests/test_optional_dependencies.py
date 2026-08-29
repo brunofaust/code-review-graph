@@ -23,4 +23,4 @@ def test_google_embeddings_extra_installs_current_google_sdk():
 
 def test_all_extra_includes_google_embeddings():
     optional = _optional_dependencies()
-    assert "code-review-graph[google-embeddings]" in optional["all"]
+    assert "code-review-graph-busydone-core[google-embeddings]" in optional["all"]

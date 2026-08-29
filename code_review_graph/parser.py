@@ -24,6 +24,8 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Any, NamedTuple, Optional
 
+import tree_sitter
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
@@ -475,9 +477,10 @@ def _parser_load_timeout_seconds() -> float:
 def _run_parser_load_probe(grammar: str, timeout_seconds: float) -> bool:
     """Probe one native grammar in a disposable interpreter process."""
     code = (
-        "from tree_sitter_language_pack import get_parser\n"
+        "import tree_sitter\n"
+        "from tree_sitter_language_pack import get_language\n"
         "import sys\n"
-        "get_parser(sys.argv[1])\n"
+        "tree_sitter.Parser(get_language(sys.argv[1]))\n"
     )
     try:
         completed = subprocess.run(
@@ -565,8 +568,26 @@ def _load_tree_sitter_parser(grammar: str):
         return None
     try:
         language_pack = importlib.import_module("tree_sitter_language_pack")
-        return language_pack.get_parser(grammar)  # type: ignore[attr-defined]
     except _EXPECTED_PARSER_LOAD_ERRORS as exc:
+        _mark_parser_unavailable(grammar)
+        logger.debug("tree-sitter parser unavailable for %s: %s", grammar, exc)
+        return None
+
+    try:
+        language = language_pack.get_language(grammar)  # type: ignore[attr-defined]
+        return tree_sitter.Parser(language)
+    except _EXPECTED_PARSER_LOAD_ERRORS as exc:
+        _mark_parser_unavailable(grammar)
+        logger.debug("tree-sitter parser unavailable for %s: %s", grammar, exc)
+        return None
+    except Exception as exc:
+        language_pack_error = getattr(language_pack, "Error", None)
+        if not (
+            isinstance(language_pack_error, type)
+            and issubclass(language_pack_error, Exception)
+            and isinstance(exc, language_pack_error)
+        ):
+            raise
         _mark_parser_unavailable(grammar)
         logger.debug("tree-sitter parser unavailable for %s: %s", grammar, exc)
         return None
@@ -2433,7 +2454,7 @@ class CodeParser:
         # files never existed on disk. See ``forget.forget_files``.
         self._excluded_files: set[str] = set()
         self._export_symbol_cache: dict[str, Optional[str]] = {}
-        self._tsconfig_resolver = TsconfigResolver()
+        self._tsconfig_resolver = TsconfigResolver(self._repo_root)
         # Per-parse cache of Dart pubspec root lookups; see #87
         self._dart_pubspec_cache: dict[tuple[str, str], Optional[Path]] = {}
         # Cargo discovery is shared by every Rust import/call in a source file.
@@ -15774,6 +15795,11 @@ class CodeParser:
         if not node.children:
             return None
 
+        if language in self._custom_languages:
+            custom_name = self._get_custom_call_name(node)
+            if custom_name is not None:
+                return custom_name
+
         first = node.children[0]
 
         if language == "rust" and node.type == "call_expression":
@@ -15969,11 +15995,6 @@ class CodeParser:
         if first.type == "namespace_operator":
             return first.text.decode("utf-8", errors="replace")
 
-        # Custom languages (languages.toml): probe common callee field names
-        # (Erlang ``call`` uses ``expr``; Haskell ``apply`` uses ``function``).
-        if language in self._custom_languages:
-            return self._get_custom_call_name(node)
-
         return None
 
     # Callee field names probed for config-driven custom languages, in order.
@@ -16001,6 +16022,16 @@ class CodeParser:
                 callee = inner
             text = callee.text.decode("utf-8", errors="replace").strip()
             if text and len(text) <= 256 and "\n" not in text:
+                parent = node.parent
+                if parent is not None and parent.child_by_field_name("fun") == node:
+                    module = parent.child_by_field_name("module")
+                    if module is not None:
+                        module_text = module.text.decode(
+                            "utf-8",
+                            errors="replace",
+                        ).strip().rstrip(":")
+                        if module_text:
+                            return f"{module_text}:{text}"
                 return text
             return None
         return None
