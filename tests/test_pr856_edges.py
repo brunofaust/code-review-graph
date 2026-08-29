@@ -37,7 +37,7 @@ def test_all_extra_covers_every_optional_group():
     referenced = {
         req.split("[", 1)[1].rstrip("]")
         for req in optional["all"]
-        if req.startswith("code-review-graph[")
+        if req.startswith("code-review-graph-busydone-core[")
     }
     expected = set(optional) - {"all", "dev"}
     assert referenced == expected
@@ -48,7 +48,7 @@ def test_all_extra_contains_only_self_referential_extras():
     resolve it against this same distribution."""
     optional = _pyproject()["project"]["optional-dependencies"]
     for req in optional["all"]:
-        assert req.startswith("code-review-graph["), req
+        assert req.startswith("code-review-graph-busydone-core["), req
         assert req.endswith("]"), req
 
 
@@ -94,7 +94,7 @@ def test_lock_requires_dist_matches_pyproject():
     crg = next(
         pkg
         for pkg in lock["package"]
-        if pkg["name"] == "code-review-graph"
+        if pkg["name"] == "code-review-graph-busydone-core"
     )
     requires = crg["metadata"]["requires-dist"]
     google = [r for r in requires if r["name"] == "google-genai"]
@@ -105,7 +105,8 @@ def test_lock_requires_dist_matches_pyproject():
     all_extras = [
         r["extras"]
         for r in requires
-        if r["name"] == "code-review-graph" and r.get("marker") == "extra == 'all'"
+        if r["name"] == "code-review-graph-busydone-core"
+        and r.get("marker") == "extra == 'all'"
     ]
     assert ["google-embeddings"] in all_extras
 

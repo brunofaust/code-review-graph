@@ -1,5 +1,14 @@
 <h1 align="center">code-review-graph</h1>
 
+> **BusyDone core artifact:** this branch builds
+> `code-review-graph-busydone-core==2.3.8+bd.1`, a lean fork of upstream v2.3.8
+> for BusyDone's embedded parser and analysis runtime. It retains the upstream
+> MIT license and provenance, uses `tree-sitter-language-pack` 1.x, and adds a
+> fail-closed repository boundary to TypeScript/JavaScript alias resolution.
+> MCP server, CLI, file-watcher, and YAML dependencies are intentionally not
+> part of the base package. `code_review_graph.BUSYDONE_FORK` is the runtime
+> identity marker. The remaining README documents the upstream project.
+
 <p align="center">
   <a href="https://trendshift.io/repositories/23329?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-23329"
      target="_blank"
