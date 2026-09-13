@@ -21,6 +21,9 @@ the deployed AWS ARM64 Linux runtime.
   simulates a platform that BusyDone does not deploy.
 - Preserve upstream changes during fork updates, but create new fork divergence
   only when the production impact is evidenced.
+- Verify vendor version bumps in BusyDone after updating its immutable artifact
+  pin. Do not run this repository's test or lint suites solely for the bump;
+  exercise the relevant BusyDone production paths from the consumer repository.
 
 ## Shell Command Safety
 
