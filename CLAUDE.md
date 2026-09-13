@@ -4,6 +4,30 @@
 
 **code-review-graph** is a persistent, incrementally updated, local-first knowledge graph for token-efficient code review through MCP and the CLI. It parses codebases using Tree-sitter and targeted fallbacks, builds a structural graph in SQLite, and exposes compact context to AI coding tools including Claude Code, Codex, Cursor, Windsurf, Zed, Continue, OpenCode, Gemini CLI, Qwen, Kiro, Qoder, and GitHub Copilot.
 
+## BusyDone Fork Scope
+
+The BusyDone fork exists only to support code paths used by BusyDone's deployed
+production workloads. Before adding or changing a fork-specific patch, identify
+the concrete BusyDone production call path and verify that the issue can affect
+the deployed AWS ARM64 Linux runtime.
+
+- Do not fix issues that have no demonstrated impact on BusyDone production.
+- A failing upstream test does not by itself justify a fork change. Report
+  upstream-only or development-only validation noise without patching it.
+- Windows, macOS, upstream CLI, MCP server, watcher, editor-extension, example,
+  and excluded optional-feature issues are out of scope unless their code is
+  packaged into or executed by a BusyDone production consumer.
+- Keep upstream behavior unchanged when a failure exists only because a test
+  simulates a platform that BusyDone does not deploy.
+- Preserve upstream changes during fork updates, but create new fork divergence
+  only when the production impact is evidenced.
+
+## Shell Command Safety
+
+Use non-interactive command flags so automation cannot hang on a prompt. This
+does not authorize deletion: destructive operations still require explicit
+confirmation and narrowly resolved targets.
+
 ## Graph Tool Usage (Token-Efficient)
 When using code-review-graph MCP tools, follow these rules:
 1. First call: `get_minimal_context(task="<description>")` — costs ~100 tokens, gives you the full picture.
