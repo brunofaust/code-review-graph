@@ -305,10 +305,10 @@ def test_real_language_pack_1x_returns_standard_tree_sitter_parser():
 
 
 def test_busy_done_fork_identity_is_exact_and_immutable():
-    assert code_review_graph.__version__ == "2.3.8+bd.1"
+    assert code_review_graph.__version__ == "2.3.8+bd.2"
     assert code_review_graph.BUSYDONE_FORK_MARKER == "code-review-graph-busydone-core"
-    assert code_review_graph.BUSYDONE_FORK_VERSION == "2.3.8+bd.1"
+    assert code_review_graph.BUSYDONE_FORK_VERSION == "2.3.8+bd.2"
     fork_identity = code_review_graph.BUSYDONE_FORK
-    assert fork_identity == ("code-review-graph-busydone-core", "2.3.8+bd.1")
+    assert fork_identity == ("code-review-graph-busydone-core", "2.3.8+bd.2")
     with pytest.raises(TypeError):
         fork_identity[0] = "changed"
