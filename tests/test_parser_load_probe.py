@@ -154,7 +154,7 @@ def test_nonzero_probe_logs_the_subprocess_failure_reason(monkeypatch, caplog):
         "ModuleNotFoundError: No module named 'tree_sitter_language_pack'"
         in caplog.text
     )
-    assert "pip install 'tree-sitter-language-pack>=0.3.0,<1'" in caplog.text
+    assert "pip install 'tree-sitter-language-pack>=1,<2'" in caplog.text
 
 
 def test_install_hint_for_missing_language_pack():
@@ -172,6 +172,7 @@ def test_install_hint_for_missing_grammar_library():
     )
     assert hint is not None
     assert "upgrade" in hint.lower() or "tree-sitter-language-pack" in hint
+    assert "tree-sitter-language-pack>=1,<2" in hint
 
 
 def test_parser_probe_env_includes_parent_language_pack_path(tmp_path, monkeypatch):

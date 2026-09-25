@@ -556,7 +556,7 @@ def _install_hint_for_probe_failure(detail: str) -> str | None:
     ):
         return (
             "Install tree-sitter-language-pack for the same Python that runs "
-            "code-review-graph: pip install 'tree-sitter-language-pack>=0.3.0,<1'"
+            "code-review-graph: pip install 'tree-sitter-language-pack>=1,<2'"
         )
     if (
         "could not find language library" in lowered
@@ -565,7 +565,7 @@ def _install_hint_for_probe_failure(detail: str) -> str | None:
         return (
             "This grammar may be missing from the installed "
             "tree-sitter-language-pack; upgrade it "
-            "(pip install -U 'tree-sitter-language-pack>=0.3.0,<1') "
+            "(pip install -U 'tree-sitter-language-pack>=1,<2') "
             "or rebuild its native extensions"
         )
     return None
