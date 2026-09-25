@@ -508,3 +508,18 @@ class TestRepositoryContainment:
         parser = CodeParser(repo_root=tmp_path)
 
         assert parser._tsconfig_resolver.repo_root == tmp_path.resolve()
+
+
+def test_resolve_alias_probes_mts_and_cts(tmp_path):
+    _write_config(tmp_path, "tsconfig.json", {"@lib/*": ["src/lib/*"]})
+    lib = tmp_path / "src" / "lib"
+    lib.mkdir(parents=True)
+    (lib / "util.mts").write_text("export const f = 1;\n", encoding="utf-8")
+    (lib / "legacy.cts").write_text("module.exports = {};\n", encoding="utf-8")
+    importer = tmp_path / "src" / "app.ts"
+    importer.write_text("", encoding="utf-8")
+    resolver = TsconfigResolver(tmp_path)
+    util = resolver.resolve_alias("@lib/util", str(importer))
+    legacy = resolver.resolve_alias("@lib/legacy", str(importer))
+    assert util is not None and util.endswith("util.mts")
+    assert legacy is not None and legacy.endswith("legacy.cts")

@@ -10,7 +10,7 @@ from .context_savings import (
     format_context_savings,
 )
 
-__version__ = "2.3.8+bd.2"
+__version__ = "2.3.9+bd.3"
 BUSYDONE_FORK_MARKER: Final[str] = "code-review-graph-busydone-core"
 BUSYDONE_FORK_VERSION: Final[str] = __version__
 BUSYDONE_FORK: Final[tuple[str, str]] = (
