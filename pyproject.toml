@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "code-review-graph-busydone-core"
-version = "2.3.9+bd.3"
+version = "2.3.9+bd.4"
 description = "BusyDone's lean parser and analysis fork of code-review-graph"
 readme = {file = "README.md", content-type = "text/markdown"}
 license = "MIT"
@@ -69,7 +69,7 @@ enrichment = [
 ]
 dev = [
     "mypy>=1.10,<3",
-    "pytest>=8.0,<9",
+    "pytest>=8.0,<10",
     "pytest-asyncio>=0.23,<2",
     "pytest-cov>=4.0,<8",
     "ruff>=0.3.0,<1",
@@ -164,7 +164,7 @@ dev = [
     "fastmcp>=3.2.4,<4",
     "mcp>=1.0.0,<3",
     "mypy>=1.10,<3",
-    "pytest>=8.0,<9",
+    "pytest>=8.0,<10",
     "pytest-asyncio>=0.23,<2",
     "pytest-cov>=4.0,<8",
     "pyyaml>=6.0,<7",
