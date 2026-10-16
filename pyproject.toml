@@ -36,7 +36,7 @@ dependencies = [
     # dependency rather than relying on fastmcp to keep pulling it in.
     "anyio>=4.0,<5",
     "tree-sitter>=0.23.0,<1",
-    "tree-sitter-language-pack>=0.3.0,<1",
+    "tree-sitter-language-pack>=1,<2",
     "pyyaml>=6.0,<7",
     "networkx>=3.2,<4",
     "watchdog>=4.0.0,<7",
