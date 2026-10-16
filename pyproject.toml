@@ -84,6 +84,8 @@ enrichment = [
     "jedi>=0.19.2",
 ]
 dev = [
+    # CI installs `.[dev]` and the suite exercises the MCP server and watch mode.
+    "code-review-graph[server]",
     "mypy>=1.10,<3",
     "pytest>=8.0,<9",
     "pytest-asyncio>=0.23,<2",

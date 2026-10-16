@@ -469,12 +469,16 @@ communities = [
     { name = "igraph" },
 ]
 dev = [
+    { name = "anyio" },
+    { name = "fastmcp" },
+    { name = "mcp" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "watchdog" },
 ]
 embeddings = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -521,6 +525,7 @@ requires-dist = [
     { name = "code-review-graph", extras = ["enrichment"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["eval"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["google-embeddings"], marker = "extra == 'all'" },
+    { name = "code-review-graph", extras = ["server"], marker = "extra == 'dev'" },
     { name = "code-review-graph", extras = ["wiki"], marker = "extra == 'all'" },
     { name = "fastmcp", marker = "extra == 'server'", specifier = ">=3.2.4,<4" },
     { name = "google-genai", marker = "extra == 'google-embeddings'", specifier = ">=1.0.0,<3" },
