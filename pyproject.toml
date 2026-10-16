@@ -73,6 +73,7 @@ wiki = [
     "ollama>=0.1.0",
 ]
 all = [
+    "code-review-graph[server]",
     "code-review-graph[embeddings]",
     "code-review-graph[google-embeddings]",
     "code-review-graph[communities]",
