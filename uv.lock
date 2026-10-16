@@ -439,16 +439,12 @@ name = "code-review-graph"
 version = "2.3.9"
 source = { editable = "." }
 dependencies = [
-    { name = "anyio" },
-    { name = "fastmcp" },
-    { name = "mcp" },
     { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "networkx", version = "3.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pyyaml" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "tree-sitter" },
     { name = "tree-sitter-language-pack" },
-    { name = "watchdog" },
 ]
 
 [package.optional-dependencies]
@@ -497,31 +493,41 @@ eval = [
 google-embeddings = [
     { name = "google-genai" },
 ]
+server = [
+    { name = "anyio" },
+    { name = "fastmcp" },
+    { name = "mcp" },
+    { name = "watchdog" },
+]
 wiki = [
     { name = "ollama" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "anyio" },
+    { name = "fastmcp" },
+    { name = "mcp" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "watchdog" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "anyio", specifier = ">=4.0,<5" },
+    { name = "anyio", marker = "extra == 'server'", specifier = ">=4.0,<5" },
     { name = "code-review-graph", extras = ["communities"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["embeddings"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["enrichment"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["eval"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["google-embeddings"], marker = "extra == 'all'" },
     { name = "code-review-graph", extras = ["wiki"], marker = "extra == 'all'" },
-    { name = "fastmcp", specifier = ">=3.2.4,<4" },
+    { name = "fastmcp", marker = "extra == 'server'", specifier = ">=3.2.4,<4" },
     { name = "google-genai", marker = "extra == 'google-embeddings'", specifier = ">=1.0.0,<3" },
     { name = "igraph", marker = "extra == 'communities'", specifier = ">=0.11.0" },
     { name = "jedi", marker = "extra == 'enrichment'", specifier = ">=0.19.2" },
     { name = "matplotlib", marker = "extra == 'eval'", specifier = ">=3.7.0" },
-    { name = "mcp", specifier = ">=1.0.0,<3" },
+    { name = "mcp", marker = "extra == 'server'", specifier = ">=1.0.0,<3" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10,<3" },
     { name = "networkx", specifier = ">=3.2,<4" },
     { name = "numpy", marker = "extra == 'embeddings'", specifier = ">=1.26,<3" },
@@ -539,14 +545,18 @@ requires-dist = [
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
     { name = "tree-sitter", specifier = ">=0.23.0,<1" },
     { name = "tree-sitter-language-pack", specifier = ">=1,<2" },
-    { name = "watchdog", specifier = ">=4.0.0,<7" },
+    { name = "watchdog", marker = "extra == 'server'", specifier = ">=4.0.0,<7" },
 ]
-provides-extras = ["embeddings", "google-embeddings", "communities", "eval", "wiki", "all", "enrichment", "dev", "browser-test"]
+provides-extras = ["server", "embeddings", "google-embeddings", "communities", "eval", "wiki", "all", "enrichment", "dev", "browser-test"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "anyio", specifier = ">=4.0,<5" },
+    { name = "fastmcp", specifier = ">=3.2.4,<4" },
+    { name = "mcp", specifier = ">=1.0.0,<3" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-asyncio", specifier = ">=0.23,<2" },
+    { name = "watchdog", specifier = ">=4.0.0,<7" },
 ]
 
 [[package]]
