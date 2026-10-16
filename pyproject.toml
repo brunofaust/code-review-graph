@@ -25,21 +25,12 @@ classifiers = [
     "Topic :: Software Development :: Quality Assurance",
 ]
 dependencies = [
-    "mcp>=1.0.0,<3",
-    # fastmcp >=3.2.4 is required for Message-based prompts and includes the
-    # CVE-2025-62800/62801/66416 fixes; <4 prevents the next major release
-    # from breaking the server the way fastmcp 3.0 did. See: #488
-    "fastmcp>=3.2.4,<4",
-    # main.py imports anyio directly: the MCP tool offload has to use the
-    # same thread limiter FastMCP dispatches sync tool bodies through, not
-    # asyncio's smaller default executor. A direct import gets a direct
-    # dependency rather than relying on fastmcp to keep pulling it in.
-    "anyio>=4.0,<5",
     "tree-sitter>=0.23.0,<1",
     "tree-sitter-language-pack>=1,<2",
+    # parser.py parses Ansible, Spring YAML and dbt project files with
+    # PyYAML; without it those files silently index nothing.
     "pyyaml>=6.0,<7",
     "networkx>=3.2,<4",
-    "watchdog>=4.0.0,<7",
     "tomli>=2.0.0,<3; python_version < '3.11'",
 ]
 
@@ -50,11 +41,20 @@ Documentation = "https://github.com/tirth8205/code-review-graph/blob/main/docs/I
 Changelog = "https://github.com/tirth8205/code-review-graph/blob/main/CHANGELOG.md"
 Issues = "https://github.com/tirth8205/code-review-graph/issues"
 
-[project.scripts]
-code-review-graph = "code_review_graph.cli:main"
-crg-daemon = "code_review_graph.daemon_cli:main"
-
 [project.optional-dependencies]
+# MCP server, CLI and watch-mode runtime. Library consumers (parser, graph,
+# incremental, changes, analysis) need none of these. No console scripts are
+# installed; run the server from source with this extra.
+server = [
+    "mcp>=1.0.0,<3",
+    # fastmcp >=3.2.4 is required for Message-based prompts and includes the
+    # CVE-2025-62800/62801/66416 fixes; <4 prevents the next major release
+    # from breaking the server the way fastmcp 3.0 did. See: #488
+    "fastmcp>=3.2.4,<4",
+    # main.py imports anyio directly for the MCP tool offload thread limiter.
+    "anyio>=4.0,<5",
+    "watchdog>=4.0.0,<7",
+]
 embeddings = [
     "sentence-transformers>=3.0.0,<7",
     "numpy>=1.26,<3",
@@ -73,6 +73,7 @@ wiki = [
     "ollama>=0.1.0",
 ]
 all = [
+    "code-review-graph[server]",
     "code-review-graph[embeddings]",
     "code-review-graph[google-embeddings]",
     "code-review-graph[communities]",
@@ -84,6 +85,8 @@ enrichment = [
     "jedi>=0.19.2",
 ]
 dev = [
+    # CI installs `.[dev]` and the suite exercises the MCP server and watch mode.
+    "code-review-graph[server]",
     "mypy>=1.10,<3",
     "pytest>=8.0,<9",
     "pytest-asyncio>=0.23,<2",
@@ -179,4 +182,9 @@ markers = [
 dev = [
     "pytest>=8.4.2",
     "pytest-asyncio>=0.23,<2",
+    # The fork's own tests exercise the MCP server and watch mode.
+    "mcp>=1.0.0,<3",
+    "fastmcp>=3.2.4,<4",
+    "anyio>=4.0,<5",
+    "watchdog>=4.0.0,<7",
 ]
