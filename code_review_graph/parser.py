@@ -3005,7 +3005,7 @@ class CodeParser:
         # files never existed on disk. See ``forget.forget_files``.
         self._excluded_files: set[str] = set()
         self._export_symbol_cache: dict[str, Optional[str]] = {}
-        self._tsconfig_resolver = TsconfigResolver()
+        self._tsconfig_resolver = TsconfigResolver(self._repo_root)
         # Per-parse cache of Dart pubspec root lookups; see #87
         self._dart_pubspec_cache: dict[tuple[str, str], Optional[Path]] = {}
         # Cargo discovery is shared by every Rust import/call in a source file.
