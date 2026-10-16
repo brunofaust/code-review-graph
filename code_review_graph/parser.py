@@ -25,6 +25,8 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Any, NamedTuple, Optional
 
+import tree_sitter
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - Python 3.10
@@ -554,7 +556,7 @@ def _install_hint_for_probe_failure(detail: str) -> str | None:
     ):
         return (
             "Install tree-sitter-language-pack for the same Python that runs "
-            "code-review-graph: pip install 'tree-sitter-language-pack>=0.3.0,<1'"
+            "code-review-graph: pip install 'tree-sitter-language-pack>=1,<2'"
         )
     if (
         "could not find language library" in lowered
@@ -563,7 +565,7 @@ def _install_hint_for_probe_failure(detail: str) -> str | None:
         return (
             "This grammar may be missing from the installed "
             "tree-sitter-language-pack; upgrade it "
-            "(pip install -U 'tree-sitter-language-pack>=0.3.0,<1') "
+            "(pip install -U 'tree-sitter-language-pack>=1,<2') "
             "or rebuild its native extensions"
         )
     return None
@@ -572,9 +574,10 @@ def _install_hint_for_probe_failure(detail: str) -> str | None:
 def _run_parser_load_probe(grammar: str, timeout_seconds: float) -> bool:
     """Probe one native grammar in a disposable interpreter process."""
     code = (
-        "from tree_sitter_language_pack import get_parser\n"
+        "import tree_sitter\n"
+        "from tree_sitter_language_pack import get_language\n"
         "import sys\n"
-        "get_parser(sys.argv[1])\n"
+        "tree_sitter.Parser(get_language(sys.argv[1]))\n"
     )
     try:
         completed = subprocess.run(
@@ -672,8 +675,26 @@ def _load_tree_sitter_parser(grammar: str):
         return None
     try:
         language_pack = importlib.import_module("tree_sitter_language_pack")
-        return language_pack.get_parser(grammar)  # type: ignore[attr-defined]
     except _EXPECTED_PARSER_LOAD_ERRORS as exc:
+        _mark_parser_unavailable(grammar)
+        logger.debug("tree-sitter parser unavailable for %s: %s", grammar, exc)
+        return None
+
+    try:
+        language = language_pack.get_language(grammar)  # type: ignore[attr-defined]
+        return tree_sitter.Parser(language)
+    except _EXPECTED_PARSER_LOAD_ERRORS as exc:
+        _mark_parser_unavailable(grammar)
+        logger.debug("tree-sitter parser unavailable for %s: %s", grammar, exc)
+        return None
+    except Exception as exc:
+        language_pack_error = getattr(language_pack, "Error", None)
+        if not (
+            isinstance(language_pack_error, type)
+            and issubclass(language_pack_error, Exception)
+            and isinstance(exc, language_pack_error)
+        ):
+            raise
         _mark_parser_unavailable(grammar)
         logger.debug("tree-sitter parser unavailable for %s: %s", grammar, exc)
         return None
