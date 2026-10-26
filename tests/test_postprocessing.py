@@ -642,3 +642,21 @@ class TestResolveBareEndpointsStep:
         assert "bare_edges_resolved" not in result
         assert any("Call-target resolution" in w for w in result["warnings"])
         assert "communities_detected" in result
+
+
+class TestRunPostProcessingStepSelection:
+    def test_flows_and_communities_can_be_skipped(self, tmp_path):
+        store = GraphStore(str(tmp_path / "g.db"))
+        try:
+            with (
+                patch("code_review_graph.postprocessing._trace_flows") as flows,
+                patch("code_review_graph.postprocessing._detect_communities") as communities,
+            ):
+                run_post_processing(store, flows=False, communities=False)
+                flows.assert_not_called()
+                communities.assert_not_called()
+                run_post_processing(store)
+                flows.assert_called_once()
+                communities.assert_called_once()
+        finally:
+            store.close()

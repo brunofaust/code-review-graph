@@ -33,6 +33,8 @@ def run_post_processing(
     store: GraphStore,
     *,
     changed_files: Sequence[str] | None = None,
+    flows: bool = True,
+    communities: bool = True,
     embedding_provider: str | None = None,
     embedding_model: str | None = None,
 ) -> dict[str, Any]:
@@ -46,6 +48,8 @@ def run_post_processing(
         changed_files: Files this update re-parsed, when the caller knows
             them. The FTS5 step then rewrites only those files' index
             entries instead of dropping and repopulating the index.
+        flows: Trace execution flows. ``False`` skips the step.
+        communities: Detect code communities. ``False`` skips the step.
 
     Returns:
         Dict with keys for each step's result count and a ``warnings``
@@ -57,8 +61,10 @@ def run_post_processing(
     _resolve_bare_endpoints(store, result, warnings)
     _compute_signatures(store, result, warnings)
     _sync_fts_index(store, result, warnings, changed_files)
-    _trace_flows(store, result, warnings)
-    _detect_communities(store, result, warnings)
+    if flows:
+        _trace_flows(store, result, warnings)
+    if communities:
+        _detect_communities(store, result, warnings)
     _refresh_embeddings(
         store,
         result,

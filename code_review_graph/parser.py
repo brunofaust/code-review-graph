@@ -2953,6 +2953,18 @@ def _ansible_is_play_item(item: object) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _type_sets(table: dict[str, list[str]]) -> dict[str, frozenset[str]]:
+    """Per-language node-type sets, built once so the AST walk never rebuilds them per node."""
+    return {language: frozenset(types) for language, types in table.items()}
+
+
+_CLASS_TYPE_SETS = _type_sets(_CLASS_TYPES)
+_FUNCTION_TYPE_SETS = _type_sets(_FUNCTION_TYPES)
+_IMPORT_TYPE_SETS = _type_sets(_IMPORT_TYPES)
+_CALL_TYPE_SETS = _type_sets(_CALL_TYPES)
+_NO_TYPES: frozenset[str] = frozenset()
+
+
 class CodeParser:
     """Parses source files using Tree-sitter and extracts structural information."""
 
@@ -3022,6 +3034,10 @@ class CodeParser:
         self._function_types: dict[str, list[str]] = _FUNCTION_TYPES
         self._import_types: dict[str, list[str]] = _IMPORT_TYPES
         self._call_types: dict[str, list[str]] = _CALL_TYPES
+        self._class_type_sets = _CLASS_TYPE_SETS
+        self._function_type_sets = _FUNCTION_TYPE_SETS
+        self._import_type_sets = _IMPORT_TYPE_SETS
+        self._call_type_sets = _CALL_TYPE_SETS
         self._custom_languages: dict[str, CustomLanguage] = {}
         if repo_root is not None:
             self._custom_languages = load_custom_languages(
@@ -3042,6 +3058,10 @@ class CodeParser:
                 self._function_types[custom.name] = list(custom.function_node_types)
                 self._import_types[custom.name] = list(custom.import_node_types)
                 self._call_types[custom.name] = list(custom.call_node_types)
+            self._class_type_sets = _type_sets(self._class_types)
+            self._function_type_sets = _type_sets(self._function_types)
+            self._import_type_sets = _type_sets(self._import_types)
+            self._call_type_sets = _type_sets(self._call_types)
 
     def _get_parser(self, language: str):  # type: ignore[arg-type]
         if language not in self._parsers:
@@ -7754,10 +7774,10 @@ class CodeParser:
         """Recursively walk the AST and extract nodes/edges."""
         if _depth > self._MAX_AST_DEPTH:
             return
-        class_types = set(self._class_types.get(language, []))
-        func_types = set(self._function_types.get(language, []))
-        import_types = set(self._import_types.get(language, []))
-        call_types = set(self._call_types.get(language, []))
+        class_types = self._class_type_sets.get(language, _NO_TYPES)
+        func_types = self._function_type_sets.get(language, _NO_TYPES)
+        import_types = self._import_type_sets.get(language, _NO_TYPES)
+        call_types = self._call_type_sets.get(language, _NO_TYPES)
 
         for child in root.children:
             node_type = child.type
