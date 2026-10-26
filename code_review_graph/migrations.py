@@ -197,6 +197,32 @@ def ensure_nodes_fts_state(conn: sqlite3.Connection) -> None:
 _BACKFILL_BATCH = 5_000
 
 
+# The text after the last ``:`` of a CALLS target, lowercased. One definition
+# shared by the index below and every query that must hit it: SQLite only
+# uses an expression index for the identical expression.
+CALL_TAIL_EXPR = (
+    "lower(replace(target_qualified, "
+    "rtrim(target_qualified, replace(target_qualified, ':', '')), ''))"
+)
+CALL_TAIL_INDEX_DDL = (
+    "CREATE INDEX IF NOT EXISTS idx_edges_call_tail "
+    f"ON edges({CALL_TAIL_EXPR}) WHERE kind = 'CALLS'"
+)
+
+# Distinct CALLS targets, trigram-indexed so ``target LIKE '%x%'`` is an index
+# lookup. Refilled by ``GraphStore.refresh_call_target_index`` after every
+# build/update; there are deliberately no triggers on ``edges``.
+CALL_TARGET_TRIGRAM_TABLE = "call_target_trigram"
+CALL_TARGET_TRIGRAM_DDL = (
+    f"CREATE VIRTUAL TABLE IF NOT EXISTS {CALL_TARGET_TRIGRAM_TABLE} "
+    "USING fts5(target, tokenize='trigram', detail='none')"
+)
+CALL_TARGET_TRIGRAM_FILL = (
+    f"INSERT INTO {CALL_TARGET_TRIGRAM_TABLE}(target) "
+    "SELECT DISTINCT target_qualified FROM edges WHERE kind = 'CALLS'"
+)
+
+
 # ---------------------------------------------------------------------------
 # Migration functions
 # ---------------------------------------------------------------------------
@@ -577,6 +603,15 @@ def _migrate_v13(conn: sqlite3.Connection) -> None:
     logger.info("Migration v13: indexed nodes.docstring and nodes.name_tokens")
 
 
+def _migrate_v14(conn: sqlite3.Connection) -> None:
+    """v14: on-disk indexes for dead-code call-target lookups."""
+    conn.execute(CALL_TAIL_INDEX_DDL)
+    conn.execute(CALL_TARGET_TRIGRAM_DDL)
+    conn.execute(f"DELETE FROM {CALL_TARGET_TRIGRAM_TABLE}")  # nosec B608
+    conn.execute(CALL_TARGET_TRIGRAM_FILL)
+    logger.info("Migration v14: added idx_edges_call_tail and call_target_trigram")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry
 # ---------------------------------------------------------------------------
@@ -594,6 +629,7 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     11: _migrate_v11,
     12: _migrate_v12,
     13: _migrate_v13,
+    14: _migrate_v14,
 }
 
 LATEST_VERSION = max(MIGRATIONS.keys())

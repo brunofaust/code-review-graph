@@ -43,6 +43,9 @@ from .constants import (
 )
 from .errors import GraphStoreError, is_lock_error
 from .migrations import (
+    CALL_TAIL_EXPR,
+    CALL_TARGET_TRIGRAM_FILL,
+    CALL_TARGET_TRIGRAM_TABLE,
     LATEST_VERSION,
     TARGET_RESOLUTION_EXPR,
     TARGET_RESOLUTION_KINDS,
@@ -1839,6 +1842,46 @@ class GraphStore:
             self._conn.rollback()
             raise
         return cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
+
+    def refresh_call_target_index(self) -> None:
+        """Refill ``call_target_trigram`` from the current CALLS targets.
+
+        Run at the end of every build, update and forget, in one transaction,
+        so dead-code lookups never see a half-filled index.
+        """
+        self._begin_immediate()
+        try:
+            self._conn.execute(f"DELETE FROM {CALL_TARGET_TRIGRAM_TABLE}")  # nosec B608
+            self._conn.execute(CALL_TARGET_TRIGRAM_FILL)
+            self._conn.commit()
+        except BaseException:
+            self._conn.rollback()
+            raise
+
+    def get_call_edges_by_tail(self, name: str) -> list[GraphEdge]:
+        """CALLS edges whose target ends in ``::<name>`` (case-insensitive).
+
+        Equality on the indexed tail; ``%`` and ``_`` in ``name`` are literal.
+        """
+        rows = self._conn.execute(
+            f"SELECT * FROM edges WHERE kind = 'CALLS' "  # noqa: S608
+            f"AND {CALL_TAIL_EXPR} = lower(?) "
+            "AND substr(target_qualified, -(length(?) + 2), 2) = '::'",
+            (name, name),
+        ).fetchall()
+        return [self._row_to_edge(r) for r in rows]
+
+    def has_call_target_like(self, *fragments: str) -> bool:
+        """``True`` when any CALLS target LIKE ``%<fragment>%`` for any fragment."""
+        for fragment in fragments:
+            row = self._conn.execute(
+                f"SELECT 1 FROM {CALL_TARGET_TRIGRAM_TABLE} "  # noqa: S608
+                "WHERE target LIKE ? LIMIT 1",
+                (f"%{fragment}%",),
+            ).fetchone()
+            if row is not None:
+                return True
+        return False
 
     def count_edges_by_resolution(self, kind: str = "CALLS") -> dict[str, int]:
         """Split one edge kind into certain and guessed target attributions.

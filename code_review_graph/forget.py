@@ -163,6 +163,7 @@ def forget_files(
     #    are fully recomputed; signatures and FTS are rebuilt; and any edge
     #    left bare by the re-parse is re-resolved.
     run_post_processing(store)
+    store.refresh_call_target_index()
 
     # 6. Drop embedding vectors that now reference a deleted node.
     purged = _purge_orphan_embeddings(store)
