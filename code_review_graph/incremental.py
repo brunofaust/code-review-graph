@@ -1851,6 +1851,7 @@ def full_build(
     hcl_stats = _run_hcl_resolver(store)
     scoped_stats = _run_scoped_resolver(store)
     _refresh_target_resolution(store)
+    store.refresh_call_target_index()
 
     return {
         "files_parsed": len(files),
@@ -2124,6 +2125,7 @@ def incremental_update(
     scoped_stats = _run_scoped_resolver(store) if scoped_changed else None
     if files_updated or stale_files:
         _refresh_target_resolution(store)
+        store.refresh_call_target_index()
 
     # Freshness follows what was stored. A file that failed to parse is
     # reported in ``errors`` and keeps its previous rows; it must not stop the

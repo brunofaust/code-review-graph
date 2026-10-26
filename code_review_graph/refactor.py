@@ -232,83 +232,6 @@ def _collect_type_referenced_names(store: GraphStore) -> set[str]:
     return names
 
 
-class _CallTargetIndex:
-    """In-memory answers to the two ``target_qualified LIKE`` lookups of dead-code detection.
-
-    ``find_dead_code`` asks, per candidate, for CALLS edges whose target ends
-    in ``::<name>`` and, per class, whether any CALLS target contains a
-    ``<prefix>`` substring. Both are leading-wildcard LIKEs, so SQLite scans
-    the whole edges table for each one. This index reads the CALLS targets
-    once and answers both from memory with identical LIKE semantics
-    (case-insensitive, ``_`` = one character, ``%`` = any run).
-    """
-
-    def __init__(self, conn: Any) -> None:
-        self._conn = conn
-        self._ids_by_segment: dict[str, list[int]] = {}
-        self._by_length: dict[int, list[tuple[str, int]]] = {}
-        targets: set[str] = set()
-        for edge_id, target in conn.execute(
-            "SELECT id, target_qualified FROM edges WHERE kind = 'CALLS'"
-        ):
-            lowered = target.lower()
-            targets.add(lowered)
-            if "::" not in lowered:
-                continue
-            segment = lowered.rsplit("::", 1)[1]
-            self._ids_by_segment.setdefault(segment, []).append(edge_id)
-            self._by_length.setdefault(len(segment), []).append((segment, edge_id))
-        self._blob = "\n".join(targets)
-
-    @staticmethod
-    def _like_regex(pattern: str) -> re.Pattern[str]:
-        parts = []
-        for char in pattern:
-            if char == "_":
-                parts.append("[^\n]")
-            elif char == "%":
-                parts.append("[^\n]*")
-            else:
-                parts.append(re.escape(char))
-        return re.compile("".join(parts))
-
-    def suffix_rows(self, name: str) -> list[Any]:
-        """CALLS edge rows whose target LIKE ``%::<name>``."""
-        lowered = name.lower()
-        if "_" not in lowered and "%" not in lowered:
-            ids = self._ids_by_segment.get(lowered, [])
-        else:
-            regex = self._like_regex(lowered)
-            pool = (
-                self._by_length.get(len(lowered), [])
-                if "%" not in lowered
-                else [item for items in self._by_length.values() for item in items]
-            )
-            ids = [edge_id for segment, edge_id in pool if regex.fullmatch(segment)]
-        if not ids:
-            return []
-        rows: list[Any] = []
-        for start in range(0, len(ids), 500):
-            chunk = ids[start:start + 500]
-            placeholders = ",".join("?" * len(chunk))
-            rows.extend(
-                self._conn.execute(
-                    f"SELECT * FROM edges WHERE id IN ({placeholders})", chunk  # noqa: S608
-                ).fetchall()
-            )
-        return rows
-
-    def has_target_containing(self, *fragments: str) -> bool:
-        """``True`` when any CALLS target LIKE ``%<fragment>%`` for any fragment."""
-        for fragment in fragments:
-            lowered = fragment.lower()
-            if lowered in self._blob:
-                return True
-            if ("_" in lowered or "%" in lowered) and self._like_regex(lowered).search(self._blob):
-                return True
-        return False
-
-
 def find_dead_code(
     store: GraphStore,
     kind: Optional[str] = None,
@@ -446,7 +369,6 @@ def find_dead_code(
                         return True
         return False
 
-    call_targets = _CallTargetIndex(conn)
     dead: list[dict[str, Any]] = []
 
     for node in candidates:
@@ -589,8 +511,7 @@ def find_dead_code(
                 language=node.language or None,
             )
             # Also search for partially-qualified targets ending with ::name
-            suffix_rows = call_targets.suffix_rows(node.name)
-            suffix_edges = [store._row_to_edge(r) for r in suffix_rows]
+            suffix_edges = store.get_call_edges_by_tail(node.name)
             all_bare = bare + suffix_edges
             all_bare = [
                 e for e in all_bare
@@ -646,7 +567,7 @@ def find_dead_code(
             member_prefix = node.qualified_name + "."
             # Also check bare class-name pattern (unresolved CALLS targets)
             bare_prefix = node.name + "."
-            if call_targets.has_target_containing(member_prefix, bare_prefix):
+            if store.has_call_target_like(member_prefix, bare_prefix):
                 has_callers = True
 
         if not (

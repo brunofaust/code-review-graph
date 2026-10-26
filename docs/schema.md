@@ -295,7 +295,7 @@ CREATE TABLE embeddings (
 
 | Key | Set by |
 |---|---|
-| `schema_version` | `migrations.py`; `13` on a current database |
+| `schema_version` | `migrations.py`; `14` on a current database |
 | `fts_state_synced` | `search.rebuild_fts_index`; mirror-shape version |
 | `last_updated` | Full and incremental builds |
 | `last_build_type` | Full and incremental builds |
@@ -326,6 +326,7 @@ CREATE TABLE embeddings (
 | `idx_edges_composite` | `edges(kind, source_qualified, target_qualified, file_path, line)` | v8 |
 | `idx_nodes_symbol` | `nodes(symbol)` | v10 |
 | `idx_edges_kind_target_resolution` | `edges(kind, target_resolution)` | v11 |
+| `idx_edges_call_tail` | partial expression index: lowercased text after the last `:` of `target_qualified`, `WHERE kind = 'CALLS'` (`migrations.CALL_TAIL_EXPR`) | v14 |
 
 ### Migrations
 
@@ -345,3 +346,4 @@ Each migration runs in its own transaction and updates `schema_version` on succe
 | 11 | `edges.target_resolution`, back-filled for `CALLS`/`REFERENCES`, and `idx_edges_kind_target_resolution` |
 | 12 | `nodes_fts_state`, the mirror of the FTS index, and `idx_nodes_fts_state_file` |
 | 13 | `nodes.docstring`, `nodes.name_tokens`, both back-filled; `nodes_fts` and `nodes_fts_state` widened to carry them |
+| 14 | `idx_edges_call_tail` and `call_target_trigram` (FTS5 trigram table over distinct CALLS targets, refilled by `GraphStore.refresh_call_target_index` after every build, update and forget) |
