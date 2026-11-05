@@ -50,10 +50,15 @@ def run_post_processing(
             entries instead of dropping and repopulating the index.
         flows: Trace execution flows. ``False`` skips the step.
         communities: Detect code communities. ``False`` skips the step.
+        embedding_provider: Exact provider for an explicit embedding
+            refresh. Must be supplied with ``embedding_model``.
+        embedding_model: Exact model for an explicit embedding refresh.
+            Must be supplied with ``embedding_provider``.
 
     Returns:
         Dict with keys for each step's result count and a ``warnings``
-        list (only present when at least one step failed).
+        list, present when at least one step failed or when an explicit
+        refresh found no index (``embeddings_refresh_skipped``).
     """
     result: dict[str, Any] = {}
     warnings: list[str] = []
@@ -216,10 +221,14 @@ def _refresh_embeddings(
         return
 
     try:
-        from .embeddings import refresh_embeddings
+        from .embeddings import REFRESH_SKIPPED_WARNING, refresh_embeddings
 
         refreshed = refresh_embeddings(store, provider=provider, model=model)
-        if refreshed is not None:
+        if refreshed is None:
+            logger.warning(REFRESH_SKIPPED_WARNING)
+            warnings.append(REFRESH_SKIPPED_WARNING)
+            result["embeddings_refresh_skipped"] = True
+        else:
             result["embeddings_refreshed"] = refreshed["embedded"]
             result["embeddings_purged"] = refreshed["purged"]
     except Exception as exc:
