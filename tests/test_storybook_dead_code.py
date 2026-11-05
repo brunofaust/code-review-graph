@@ -183,6 +183,8 @@ def test_member_call_scan_sees_production_caller_among_many_story_rows(tmp_path)
         store.upsert_edge(EdgeInfo('CALLS', 'app.tsx::App', 'Widget.tsx::Widget.render',
                                   'app.tsx', 3))
         store.commit()
+        # The call-target index is refilled after every build/update (fork, BD-3296).
+        store.refresh_call_target_index()
         assert 'Widget' not in _dead_names(store, tmp_path)
 
 
