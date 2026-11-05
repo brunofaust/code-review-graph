@@ -211,7 +211,8 @@ CALL_TAIL_INDEX_DDL = (
 
 # Distinct CALLS targets, trigram-indexed so ``target LIKE '%x%'`` is an index
 # lookup. Refilled by ``GraphStore.refresh_call_target_index`` after every
-# build/update; there are deliberately no triggers on ``edges``.
+# build/update; there are deliberately no triggers on ``edges``. Targets called
+# only from Storybook files are left out (see the fill statement).
 CALL_TARGET_TRIGRAM_TABLE = "call_target_trigram"
 CALL_TARGET_TRIGRAM_DDL = (
     f"CREATE VIRTUAL TABLE IF NOT EXISTS {CALL_TARGET_TRIGRAM_TABLE} "
@@ -219,7 +220,11 @@ CALL_TARGET_TRIGRAM_DDL = (
 )
 CALL_TARGET_TRIGRAM_FILL = (
     f"INSERT INTO {CALL_TARGET_TRIGRAM_TABLE}(target) "
-    "SELECT DISTINCT target_qualified FROM edges WHERE kind = 'CALLS'"
+    "SELECT DISTINCT target_qualified FROM edges WHERE kind = 'CALLS' "
+    # Storybook-only callers are not production liveness evidence; mirrors
+    # parser._STORYBOOK_FILE_RE (``\\.stories\\.[jt]sx?$``), GLOB is case-sensitive.
+    "AND file_path NOT GLOB '*.stories.[jt]s' "
+    "AND file_path NOT GLOB '*.stories.[jt]sx'"
 )
 
 
